@@ -1,37 +1,42 @@
 import ajv from "./ajvInstance.js";
 
-// Schemas for signup, login and update
+// Schemas used for signup, login and update
 const nameSchema = { type: "string", minLength: 3, maxLength: 50 };
 const phoneSchema = { type: "string", pattern: "^[0-9]{10}$" };
 const emailSchema = { type: "string", format: "email" };
 const passwordSchema = { type: "string", pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#\\$%\\^&\\*])(?=.{8,})" };
 
-// I don't think i should do it it's a complicated pattern and seem useless to check for it.
-
-  // Schema for token validation
-  // const tokenSchema = { type: "string", pattern: "^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$" };
-
-  // const verifyEmailSchema = {
-  //   type: "object",
-  //   properties: {
-  //     token: tokenSchema,
-  //   },
-  //   required: ["token"],
-  //   additionalProperties: false,
-  
-// };
+// Schema for otp validation
+const otpSchema = { type: "string", pattern: "^[a-zA-Z0-9]{6}$" };
 
 const signupSchema = {
   type: "object",
   properties: {
     phone: phoneSchema,
     email: emailSchema,
-    password: passwordSchema,
   },
   anyOf: [
-    { required: ["phone", "password"] },
-    { required: ["email", "password"] }
+    { required: ["phone"] },
+    { required: ["email"] }
   ],
+  additionalProperties: false,
+};
+
+const verifyOTP = {
+  type: "object",
+  properties: {
+    otp: otpSchema
+  },
+  required: ["otp"],
+  additionalProperties: false,
+};
+
+const setPasswordSchema = {
+  type: "object",
+  properties: {
+    password: passwordSchema,
+  },
+  required: ["password"],
   additionalProperties: false,
 };
 
@@ -53,6 +58,8 @@ const loginSchema = {
 };
 
 const validateSignup = ajv.compile(signupSchema);
+const validateVerifyOTP = ajv.compile(verifyOTP);
+const validateSetPassword = ajv.compile(setPasswordSchema);
 const validateLogin = ajv.compile(loginSchema);
 
-export { validateSignup, validateLogin,  };
+export { validateSignup, validateVerifyOTP, validateSetPassword, validateLogin,  };

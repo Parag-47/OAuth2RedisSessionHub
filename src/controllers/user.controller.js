@@ -3,7 +3,7 @@ import { User } from "../models/user.model.js";
 import {
   isTrustedEmail,
   generateAlphanumericOTP,
-  SENDMAIL
+  SENDMAIL,
 } from "../services/mail.services.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
@@ -67,9 +67,9 @@ async function googleAuthCallback(req, res) {
 const signup = asyncHandler(async (req, res) => {
   if (req.session.userId) return res.redirect("/");
 
-  let { phone, email, password } = req.body;
+  let { phone, email } = req.body;
 
-  if (!(phone || email) || !password)
+  if (!(phone || email) )
     throw new ApiError(400, "All fields are required!");
 
   if (email) email = email.toLowerCase();
@@ -80,7 +80,7 @@ const signup = asyncHandler(async (req, res) => {
       { email: { $exists: true, $eq: email } },
     ],
   });
-
+  // Check if password felid is present and resend otp 
   if (existedUser) {
     if (
       existedUser.verified_email === true ||
@@ -102,79 +102,76 @@ const signup = asyncHandler(async (req, res) => {
       `We Only Accept Email Account From These Providers: ${trustedDomains}`
     );
 
-/*Legacy Code Used For Generating JWT Token Which Then Was Sent To User's Email In The Form Of A Verification Link
-  
-  const token = createToken(email);
-  if (!token) throw new ApiError(500, "Failed to Create Token!");
-
-  const newToken = await Token.create({
-    userId: newUser._id,
-    token: token,
-    createdAt: new Date(),
-  });
-  
-  if (!newToken) throw new ApiError(500, "Failed To Create User!");
-
-  // const ORIGIN =
-  //   process.env.NODE_ENV === "production"
-  //     ? process.env.PROD_ORIGIN
-  //     : process.env.DEV_ORIGIN;
-
-  const link = `${ORIGIN}/api/v1/user/verifyEmail/${otp}`;
-  
-*/
-
   const otp = generateAlphanumericOTP(6);
 
-  // const result = await SENDMAIL(email, otp, (info) => {
-  //   console.log("info: ", info);
-  //   if (info.success) {
-  //     console.log("Email sent successfully!", info.messageId);
-  //   } else {
-  //     //console.error("Failed to send email!", info.error);
-  //     throw new ApiError(500, "Failed to send email!", info.error);
-  //   }
-  // });
+  // const saveOTP = await storeOTP(email, otp);
+
+  // if (saveOTP !== "OK") throw new ApiError(500, "Failed To Generate OTP!");
 
   const info = await SENDMAIL(email, otp);
-  if(info.success === false) throw new ApiError(500, "Failed to send email!", info);
 
-  // const hashedPassword = await bcrypt.hash(password, 10);
+  if (info.success === false)
+    throw new ApiError(500, "Failed to send email!", info);
 
-  // const newUser = await User.create({
-  //   email: email,
-  //   password: hashedPassword,
-  // });
+  req.session.cookie.maxAge = 1000 * 60 * 2; // 2 min
+  req.session.otpData = {email, otp};
 
-  // if (!newUser) throw new ApiError(500, "Failed To Create User!");
-
-  // Redirecting the user to the login page.
-  res.status(302).redirect("/loginPage");
+  res
+    .status(200)
+    .json(new ApiResponse(200, true, "Verification Mail Sent Successfully!"));
 });
 
 const resendVerificationCode = asyncHandler(async (req, res) => {
 
 });
 
-const verifyEmail = asyncHandler(async (req, res) => {
-  const { token } = req.params;
-  // console.log("token: ", token);
-  const decodedToken = isValidToken(token);
-  if (!decodedToken) throw new ApiError(500, "Failed To Verify Token!");
-  // console.log(decodedToken.email);
-  const doesTokenExists = await Token.findOneAndDelete({ token: token });
-  // console.log("Deleted Token: ", doesTokenExists);
-  if (!doesTokenExists) throw new ApiError(500, "Invalid Token!");
-  const verifyUserEmail = await User.findByIdAndUpdate(
-    doesTokenExists.userId,
-    { $set: { verified_email: true } },
-    { new: true }
-  );
-  console.log("verifyUserEmail: ", verifyUserEmail);
+const verifyOTP = asyncHandler(async (req, res) => {
+  if(!req.session.otpData) throw new ApiError(401, "Email Verification Required Or Session Is Expired!");
+  
+  const email = req.session.otpData.email;
+  let { otp } = req.body;
+  otp = otp.trim();
+
+  const existedUser = await User.findOne({
+    email: { $exists: true, $eq: email }
+  });
+
+  if (existedUser)
+    throw new ApiError(
+      400,
+      "This Email Or Phone Number Is Already Registered!"
+    );
+
+  if(otp !== req.session.otpData.otp) throw new ApiError(500, "Invalid OTP!");
+
+  const verifyUserEmail = await User.create({
+    email: email,
+    verified_email: true,
+  });
+
   if (!verifyUserEmail) throw new ApiError(500, "Failed To Verify Email!");
+
   res
     .status(200)
     .json(new ApiResponse(200, true, "Email Verified Successfully!"));
+});
+
+const setPassword = asyncHandler(async (req, res) => {
+  if(!req.session.OTP) throw new ApiError(401, "Email Verification Required Or Session Is Expired!");
+  
+  const { email } = req.session.OTP;
+  const { password } = req.body;
+
+  const user = await User.findOne({email: email});
+  if(user.password) throw new ApiError(400, "Password Is Already Set!");  
+  
+  const hashedPassword = await bcrypt.hash(password.trim(), 10);
+
+  const set_password = await User.findByIdAndUpdate(user._id, { $set: { password: hashedPassword } });
+
+  if (!set_password) throw new ApiError(500, "Failed To Set Password!");
+
+  res.status(200).json(new ApiResponse(200, true, "Password Saved Successfully!"));
 });
 
 const login = asyncHandler(async (req, res) => {
@@ -264,7 +261,8 @@ export {
   googleAuth,
   googleAuthCallback,
   signup,
-  verifyEmail,
+  verifyOTP,
+  setPassword,
   login,
   logout,
   updateAccountInfo,

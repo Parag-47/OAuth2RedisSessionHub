@@ -6,7 +6,7 @@ import hpp from "hpp";
 import session from "express-session";
 import mongoSanitize from "express-mongo-sanitize";
 import userRouter from "./routes/user.routes.js";
-import valkeyStore from "./db/valkey.js";
+import { valkeyStore } from "./db/valkey.js";
 
 const cookieOptions = {
   httpOnly: true,

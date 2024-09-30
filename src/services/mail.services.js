@@ -1,4 +1,3 @@
-// import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import MAIL_TEMPLATE from "../templates/mail.template.js";
@@ -26,9 +25,22 @@ function isTrustedEmail(email) {
   return trustedDomains.includes(domain);
 }
 
+// Includes only a to f small case alphabets caz hex, could use base64 but will include special characters  
+// function generateAlphanumericOTP(length) {
+//   const otp = crypto.randomBytes(length).toString("hex").slice(0, length);
+//   return otp;
+// }
+
 function generateAlphanumericOTP(length) {
-  const otp = crypto.randomBytes(length).toString("hex").slice(0, length);
-  return otp;
+  const alphanumericChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+
+  for (let i = 0; i < length; i++) {
+    const randomIndex = crypto.randomInt(0, alphanumericChars.length);
+    result += alphanumericChars[randomIndex];
+  }
+
+  return result;
 }
 
 const transporter = nodemailer.createTransport({
